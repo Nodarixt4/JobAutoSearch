@@ -73,9 +73,9 @@
     // Use o endpoint completo, por exemplo http://localhost:PORTA/v1/chat/completions.
     // Não publique tokens neste HTML: em produção, autentique em um backend/proxy.
     const CONFIG = {
-      endpoint: 'COLE_AQUI_A_URL_COMPLETA_DO_9ROUTER',
-      bearerToken: 'COLE_AQUI_O_BEARER_TOKEN',
-      model: 'COLE_AQUI_O_ID_REAL_DO_MODELO_NO_9ROUTER',
+      endpoint: 'http://localhost:20128/v1',
+      bearerToken: 'Bearer sk-cd2dc3b064235995-fsn6lg-b9ae585b',
+      model: 'cx/gpt-5.6-terra',
       timeoutMs: 180000,
       // Apenas parâmetros documentados pelo seu provedor para habilitar busca web.
       // O prompt sozinho NÃO habilita browsing. Tool calls exigem execução no servidor.
