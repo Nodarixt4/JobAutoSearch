@@ -111,6 +111,23 @@ Se nenhuma vaga puder ser verificada, ou se busca/navegação não estiver dispo
     let jobs = [];
     let activeFilter = 'all';
 
+    function requestConfig() {
+      let endpoint;
+      try {
+        endpoint = new URL(CONFIG.endpoint.trim());
+      } catch {
+        throw new Error('Endpoint inválido. Informe uma URL completa HTTP ou HTTPS.');
+      }
+      if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
+        throw new Error('O endpoint precisa usar HTTP ou HTTPS e não pode conter credenciais na URL.');
+      }
+      const path = endpoint.pathname.replace(/\/+$/, '');
+      if (!path || path.endsWith('/v1')) endpoint.pathname = `${path || '/v1'}/chat/completions`;
+      const token = CONFIG.bearerToken.trim().replace(/^(?:Bearer\s+)+/i, '').trim();
+      if (!token) throw new Error('Configure um bearerToken válido no bloco CONFIG.');
+      return { endpoint, authorization: `Bearer ${token}` };
+    }
+
     // Não insira HTML retornado pelo modelo: toda informação externa usa textContent.
     function element(tag, className, text) {
       const node = document.createElement(tag);
@@ -190,17 +207,18 @@ Se nenhuma vaga puder ser verificada, ou se busca/navegação não estiver dispo
         if ([CONFIG.endpoint, CONFIG.bearerToken, CONFIG.model].some((value) => !value || value.startsWith('COLE_AQUI'))) {
           throw new Error('Configure endpoint, bearerToken e model no bloco CONFIG do index.html antes de pesquisar.');
         }
-        const endpoint = new URL(CONFIG.endpoint);
-        if (!['http:', 'https:'].includes(endpoint.protocol)) throw new Error('O endpoint precisa usar HTTP ou HTTPS.');
+        const { endpoint, authorization } = requestConfig();
         $('search-button').disabled = true;
         $('search-button').textContent = 'Pesquisando…';
         $('jobs').setAttribute('aria-busy', 'true');
         $('status').textContent = 'Solicitando pesquisa ao provedor. A verificação das fontes pode levar alguns minutos.';
         const controller = new AbortController();
         timer = setTimeout(() => controller.abort(), CONFIG.timeoutMs);
-        const response = await fetch(endpoint.href, {
+        let response;
+        try {
+          response = await fetch(endpoint.href, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${CONFIG.bearerToken}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': authorization },
           signal: controller.signal,
           body: JSON.stringify({
             ...CONFIG.providerOptions,
@@ -211,7 +229,11 @@ Se nenhuma vaga puder ser verificada, ou se busca/navegação não estiver dispo
               { role: 'user', content: `Data de referência: ${new Date().toISOString()}. Pesquise agora vagas atuais conforme o perfil e retorne somente o array JSON exigido.` }
             ]
           })
-        });
+          });
+        } catch (error) {
+          if (error.name === 'AbortError') throw error;
+          throw new Error(`Não foi possível conectar ao 9Router em ${endpoint.origin}${endpoint.pathname}. Origem da página: ${location.origin}. Confira se o serviço está ativo e se o navegador permite acesso à rede local. Verifique também CORS e HTTPS/HTTP; se abriu o HTML como arquivo, use um servidor local.`);
+        }
         if (!response.ok) {
           const guidance = { 401: 'Confira o Bearer Token.', 403: 'Confira as permissões do provedor.', 404: 'Confira o endpoint completo e o identificador do modelo.', 429: 'Limite de requisições atingido; tente novamente mais tarde.' };
           throw new Error(`Erro HTTP ${response.status}. ${guidance[response.status] || 'Verifique o serviço 9Router e o provedor.'}`);
@@ -237,9 +259,7 @@ Se nenhuma vaga puder ser verificada, ou se busca/navegação não estiver dispo
           ? 'A pesquisa excedeu 3 minutos. Confira o provedor ou tente novamente.'
           : error instanceof SyntaxError
             ? 'A API não retornou JSON válido. Confira o prompt, o modo sem streaming e o limite de saída.'
-            : error instanceof TypeError
-              ? 'Falha de conexão ou URL inválida. Confira o endpoint, se o 9Router está ativo, CORS e bloqueios de conteúdo misto HTTPS/HTTP.'
-              : error.message;
+            : error.message;
         $('error').hidden = false;
         $('status').textContent = jobs.length ? 'A atualização falhou. Os resultados anteriores foram mantidos.' : 'Não foi possível concluir a pesquisa.';
       } finally {

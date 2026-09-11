@@ -4,7 +4,7 @@ Mostruário pessoal de vagas em HTML, Tailwind CSS via CDN e JavaScript nativo. 
 
 ## Configuração
 
-1. Abra `index.html` e edite `CONFIG`: `endpoint` (URL completa do 9Router), `bearerToken` e `model` (identificador real aceito pelo seu gateway).
+1. Abra `index.html` e edite `CONFIG`: `endpoint` (URL completa do 9Router, como `http://localhost:20128/v1/chat/completions`), `bearerToken` e `model` (identificador real aceito pelo seu gateway). URLs base terminadas em `/v1` recebem `/chat/completions` automaticamente; URLs contendo somente a origem recebem `/v1/chat/completions`. O token aceita valores com ou sem o prefixo `Bearer`, sem duplicá-lo no cabeçalho.
 2. Esta implementação assume uma API compatível com **OpenAI Chat Completions**, usando POST, `messages`, `stream: false` e resposta em `choices[0].message.content`. Um array JSON direto também é aceito. Se sua instalação usar outro contrato, adapte a requisição e a extração da resposta.
 3. Habilite busca web/navegação no provedor utilizado pelo 9Router. Se necessário, configure `providerOptions` com os parâmetros documentados por esse provedor. Não existe um parâmetro universal de busca para todos os modelos/gateways. O nome comercial do modelo não garante browsing; use o ID informado pela instalação.
 4. Abra a página com um servidor estático local, por exemplo a extensão Live Server do VS Code. A abertura direta como arquivo pode ser bloqueada pelo CORS do gateway.
