@@ -57,7 +57,7 @@ Abra `http://localhost:3000` e clique em **Buscar oportunidades**. Encerre com `
 | Variável | Uso |
 | --- | --- |
 | `GEMINI_API_KEY` | Segredo obrigatório para realizar pesquisas. Configure em `.env` localmente ou em **Environment** no Render. |
-| `GEMINI_MODEL` | Padrão: `gemini-2.5-flash`. Para trocar, use um identificador disponível no seu projeto e compatível com a ferramenta Google Search na Gemini API. |
+| `GEMINI_MODEL` | Padrão: `gemini-3.6-flash`. Para trocar, use um identificador disponível no seu projeto e compatível com a ferramenta Google Search na Gemini API. |
 | `PORT` | Padrão local: `3000`. No Render, deixe a plataforma fornecer a porta. O servidor escuta em `0.0.0.0`. |
 | `APP_USERNAME` | Usuário da autenticação HTTP Basic. Deve ser configurado junto com `APP_PASSWORD`. |
 | `APP_PASSWORD` | Senha da aplicação, distinta da chave Gemini. Use uma senha forte e exclusiva. |
@@ -80,7 +80,7 @@ Antes do deploy, envie ao repositório remoto os arquivos da aplicação e o `pa
 1. No Render, escolha **New > Blueprint** e conecte o repositório e a branch desejada.
 2. Use o `render.yaml` da raiz. Ele declara apenas um serviço, `job-auto-search`, com runtime Node.
 3. Informe `GEMINI_API_KEY` no campo de configuração solicitado pelo Render (`sync: false`). Copie-a diretamente do AI Studio para o painel, nunca por chat ou commit.
-4. Confirme a criação. O blueprint define `NODE_ENV=production`, `GEMINI_MODEL=gemini-2.5-flash` e `APP_USERNAME=admin`, além de gerar `APP_PASSWORD` automaticamente.
+4. Confirme a criação. O blueprint define `NODE_ENV=production`, `GEMINI_MODEL=gemini-3.6-flash` e `APP_USERNAME=admin`, além de gerar `APP_PASSWORD` automaticamente.
 5. Abra o serviço criado e consulte **Environment** para recuperar o valor gerado de `APP_PASSWORD`. Guarde-o em um gerenciador de senhas. Essa senha não é a chave Gemini.
 6. Acesse a URL HTTPS do serviço. No diálogo de autenticação do navegador, use o usuário **admin** e a senha recuperada no painel.
 
@@ -101,7 +101,7 @@ Em **New > Web Service**, conecte o mesmo repositório e configure:
 
 O Tailwind é uma dependência de desenvolvimento; `--include=dev` garante sua instalação durante o build, mesmo com `NODE_ENV=production`. O requisito de Node 22.x está em `package.json`; confira a versão nos logs do build.
 
-Em **Environment**, configure `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-2.5-flash` e `NODE_ENV=production`. **Recomenda-se definir também as duas variáveis `APP_USERNAME` e `APP_PASSWORD`**, usando um usuário escolhido por você e uma senha forte. A configuração manual não gera automaticamente a senha do blueprint.
+Em **Environment**, configure `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-3.6-flash` e `NODE_ENV=production`. **Recomenda-se definir também as duas variáveis `APP_USERNAME` e `APP_PASSWORD`**, usando um usuário escolhido por você e uma senha forte. A configuração manual não gera automaticamente a senha do blueprint.
 
 Inicie o deploy e acompanhe os logs. Use a URL HTTPS fornecida pelo Render. Não configure CORS ou endpoint externo no HTML: o navegador chama a API na mesma origem. Para trocar segredos ou modelo, atualize **Environment** e aplique a alteração com reinicialização/redeploy.
 
@@ -109,7 +109,7 @@ Inicie o deploy e acompanhe os logs. Use a URL HTTPS fornecida pelo Render. Não
 
 O prompt em `lib/search.js` usa um perfil fixo: Engenharia de Computação em formação, front-end na Infocorp UFMT, estágio em redes e infraestrutura na Aptum e suporte avançado. Prioriza front-end, redes, infraestrutura, suporte, DevOps e software júnior/pleno; orienta excluir liderança, sênior e híbrido fora de MT. Para personalizar esse perfil, altere o prompt no servidor e revise também os textos da interface.
 
-Cada chamada solicita pesquisa no Google, com preferência por anúncios individuais recentes e até 18 sugestões. A resposta deve conter exatamente `titulo`, `empresa`, `local`, `descricao` e `url`, todos strings não vazias. O backend valida formato, limites de tamanho e URLs HTTP(S) sem credenciais embutidas.
+Cada chamada solicita pesquisa no Google, com preferência por anúncios individuais recentes e até 10 sugestões. A resposta deve conter exatamente `titulo`, `empresa`, `local`, `descricao` e `url`, todos strings não vazias. O backend valida formato, limites de tamanho e URLs HTTP(S) sem credenciais embutidas. O raciocínio usa nível baixo nos modelos Gemini 3 para reduzir latência e custo.
 
 O backend exige resposta finalizada com `STOP` e consultas não vazias em `groundingMetadata.webSearchQueries`. Uma lista não vazia também exige fontes válidas em `groundingChunks`. **Ausência de grounding, resposta interrompida, JSON inválido ou vagas sem fontes são erros, não uma pesquisa com zero resultados.** Uma lista vazia é aceita somente depois das verificações aplicáveis, incluindo confirmação de consultas.
 

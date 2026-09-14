@@ -20,18 +20,38 @@ test('reject ungrounded results, unsafe URLs and truncated output', () => {
   assert.throws(() => parseSearch(payload([{ ...job, url: 'javascript:alert(1)' }])), /inseguro/);
   const truncated = payload();
   truncated.candidates[0].finishReason = 'MAX_TOKENS';
-  assert.throws(() => parseSearch(truncated), /interrompeu/);
+  assert.throws(() => parseSearch(truncated), /limite de resposta/);
 });
 test('request actually enables Google Search and keeps key in header', async () => {
   const result = await searchJobs({ apiKey: 'test-key', fetchImpl: async (url, options) => {
     assert.ok(!url.includes('test-key'));
     assert.equal(options.headers['x-goog-api-key'], 'test-key');
-    assert.deepEqual(JSON.parse(options.body).tools, [{ google_search: {} }]);
+    const body = JSON.parse(options.body);
+    assert.deepEqual(body.tools, [{ google_search: {} }]);
+    assert.equal(body.generationConfig.maxOutputTokens, 4096);
+    assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'low' });
     return Response.json(payload());
   } });
   assert.equal(result.jobs.length, 1);
   await assert.rejects(searchJobs({}), error => error.status === 503);
   await assert.rejects(searchJobs({ apiKey: 'test', fetchImpl: async () => new Response('', { status: 429 }) }), error => error.status === 429);
+});
+test('logs unfinished response reason without exposing response content', async () => {
+  const warnings = [];
+  const unfinished = payload();
+  unfinished.candidates[0].finishReason = 'SAFETY';
+  unfinished.candidates[0].safetyRatings = [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', blocked: true }];
+  await assert.rejects(searchJobs({
+    apiKey: 'test-key',
+    logger: { warn: (...args) => warnings.push(args) },
+    fetchImpl: async () => Response.json(unfinished)
+  }), /filtros de seguranca/);
+  assert.deepEqual(warnings[0], ['Gemini response unfinished', {
+    model: 'gemini-3.6-flash',
+    finishReason: 'SAFETY',
+    blockReason: undefined,
+    safetyCategories: ['HARM_CATEGORY_DANGEROUS_CONTENT']
+  }]);
 });
 
 async function serve(t, options) {
