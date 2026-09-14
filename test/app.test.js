@@ -13,6 +13,11 @@ test('parse grounded jobs, duplicates and empty search', () => {
   assert.equal(parseSearch(payload([job, job])).jobs.length, 1);
   assert.deepEqual(parseSearch(payload([])).jobs, []);
 });
+test('accepts web grounding chunks when search queries are omitted', () => {
+  const grounded = payload();
+  delete grounded.candidates[0].groundingMetadata.webSearchQueries;
+  assert.equal(parseSearch(grounded).jobs.length, 1);
+});
 test('reject ungrounded results, unsafe URLs and truncated output', () => {
   const raw = payload([]);
   delete raw.candidates[0].groundingMetadata;
