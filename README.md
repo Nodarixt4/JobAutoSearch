@@ -1,64 +1,177 @@
 # JobAutoSearch
 
-Mostruário pessoal de vagas em HTML, Tailwind CSS via CDN e JavaScript nativo. Sem instalação de dependências ou build. Nenhuma vaga de exemplo é apresentada como real.
+Radar pessoal de oportunidades de tecnologia em Cuiabá, Várzea Grande, Mato Grosso e trabalho 100% remoto no Brasil. Usa Gemini com Google Search para produzir sugestões acompanhadas de fontes. **Não são vagas verificadas de forma independente:** confirme requisitos, localização, legitimidade e disponibilidade no anúncio original.
 
-## Como rodar o projeto
+O projeto não envia candidaturas, não contorna login ou CAPTCHA e não exige 9Router. A antiga execução com servidor estático Python não atende à arquitetura atual.
+
+## Arquitetura
+
+Um único serviço Node.js/Express serve a interface, o CSS compilado e a API na mesma origem:
+
+- `index.html`: interface, filtros locais e apresentação de fontes.
+- `server.js`: servidor, autenticação HTTP Basic opcional, limites, cache e API.
+- `lib/search.js`: prompt, chamada ao Gemini com `google_search`, validação e deduplicação.
+- `styles/input.css` e `tailwind.config.js`: entrada e configuração do Tailwind.
+- `public/styles.css`: arquivo gerado por `npm run build`, servido em `/styles.css`.
+- `.env.example`: nomes das variáveis, sem credenciais preenchidas.
+- `render.yaml`: blueprint para um único Web Service no Render.
+
+Não há banco de dados nem serviço de frontend separado. O CSS é compilado localmente, sem CDN do Tailwind; as fontes tipográficas são carregadas do Google Fonts.
+
+## Execução local
 
 ### Pré-requisitos
 
-- Python 3 instalado e um navegador atualizado.
-- Conexão com a internet para carregar Tailwind, fontes e acessar o provedor.
-- Para pesquisar vagas: uma instância do 9Router acessível, um token válido e um modelo com busca web habilitada.
+- Node.js **22.x**, conforme `package.json`, e npm.
+- Navegador atualizado e conexão com a internet.
+- Para pesquisar: chave da Gemini API criada no [Google AI Studio](https://aistudio.google.com/apikey), projeto com acesso ao modelo e condições de uso/faturamento compatíveis com Google Search.
 
-### Passo a passo
+### Instalar e iniciar
 
-1. Abra a pasta `JobAutoSearch` no VS Code e abra o terminal integrado nessa pasta.
-2. Configure `endpoint`, `bearerToken` e `model` no objeto `CONFIG` de `index.html`, conforme a seção **Configuração**. Não salve credenciais reais em commits.
-3. Inicie o 9Router conforme as instruções da sua instalação; ele não acompanha este projeto.
-4. Execute no terminal:
+Na primeira configuração:
 
-	```bash
-	python3 -m http.server 5500 --bind 127.0.0.1
-	```
+```bash
+cd /home/gabriel/Documentos/GitHub/JobAutoSearch
+node --version
+npm install
+cp .env.example .env
+```
 
-5. Abra `http://127.0.0.1:5500` no navegador. Autorize essa origem exata no CORS do 9Router.
-6. Clique em **Buscar oportunidades** para executar a pesquisa. Cada busca pode gerar custos no provedor.
+Se `.env` já existir, preserve seu conteúdo em vez de executar a cópia novamente. Abra o arquivo localmente no editor e preencha `GEMINI_API_KEY`. **Nunca envie a chave no chat, coloque-a no HTML/JavaScript ou faça commit dela.**
 
-Não é necessário instalar dependências com npm nem executar build. O servidor usa apenas a biblioteca padrão do Python e fica acessível somente nesta máquina. Sem configurar o 9Router, você pode abrir e visualizar a interface, mas não pesquisar vagas. Para encerrar o servidor local, pressione `Ctrl+C` no terminal.
+Depois:
 
-## Configuração
+```bash
+npm run build
+npm start
+```
 
-1. Abra `index.html` e edite `CONFIG`: `endpoint` (URL completa do 9Router, como `http://localhost:20128/v1/chat/completions`), `bearerToken` e `model` (identificador real aceito pelo seu gateway). URLs base terminadas em `/v1` recebem `/chat/completions` automaticamente; URLs contendo somente a origem recebem `/v1/chat/completions`. O token aceita valores com ou sem o prefixo `Bearer`, sem duplicá-lo no cabeçalho.
-2. Esta implementação assume uma API compatível com **OpenAI Chat Completions**, usando POST, `messages`, `stream: false` e resposta em `choices[0].message.content`. Um array JSON direto também é aceito. Se sua instalação usar outro contrato, adapte a requisição e a extração da resposta.
-3. Habilite busca web/navegação no provedor utilizado pelo 9Router. Se necessário, configure `providerOptions` com os parâmetros documentados por esse provedor. Não existe um parâmetro universal de busca para todos os modelos/gateways. O nome comercial do modelo não garante browsing; use o ID informado pela instalação.
-4. Abra a página com o servidor estático local descrito em **Como rodar o projeto**. A abertura direta como arquivo pode ser bloqueada pelo CORS do gateway.
-5. Clique em **Buscar oportunidades**. Cada clique solicita uma nova pesquisa e pode gerar custos no provedor. Os filtros operam localmente, sem novas chamadas.
+Abra `http://localhost:3000` e clique em **Buscar oportunidades**. Encerre com `Ctrl+C`. Não abra o HTML diretamente nem use Live Server ou `python -m http.server`: a interface depende de `/api/jobs` no Express.
 
-## Prompt e contrato
+`npm start` carrega `.env`, se existir, pelo suporte nativo do Node. Variáveis já definidas no ambiente têm precedência. Reinicie o processo após mudar a configuração. Reexecute o build após alterações nas classes Tailwind ou nos estilos; o script de inicialização não compila CSS automaticamente.
 
-O System Prompt completo está em `SYSTEM_PROMPT`, dentro de `index.html`, e já é enviado pela página. Solicita pesquisa em LinkedIn, Gupy, Catho, InfoJobs, sites locais e páginas oficiais, priorizando Cuiabá, Mato Grosso e trabalho totalmente remoto no Brasil.
+**Lockfile para deploy:** `package-lock.json` acompanha o projeto. Versione-o junto de `package.json` ao atualizar dependências. O comando de build do Render usa `npm ci`, que exige um lockfile presente e sincronizado. Não versione `node_modules`, `.env` ou credenciais.
 
-A saída exigida é um array JSON. Cada objeto contém exatamente cinco strings não vazias: `titulo`, `empresa`, `local`, `descricao`, `url`. Sem Markdown ou explicações. Ausência de vagas verificáveis ou indisponibilidade de ferramentas deve resultar em `[]`.
+### Variáveis de ambiente
 
-O prompt orienta verificação das páginas e descarte de anúncios inacessíveis/encerrados. Isso não garante correção factual: a validação no navegador verifica o formato e URLs HTTP/HTTPS, não a existência nem a disponibilidade das vagas. Confira a fonte original. Uma lista vazia não permite distinguir ausência de vagas de ausência de browsing.
+| Variável | Uso |
+| --- | --- |
+| `GEMINI_API_KEY` | Segredo obrigatório para realizar pesquisas. Configure em `.env` localmente ou em **Environment** no Render. |
+| `GEMINI_MODEL` | Padrão: `gemini-2.5-flash`. Para trocar, use um identificador disponível no seu projeto e compatível com a ferramenta Google Search na Gemini API. |
+| `PORT` | Padrão local: `3000`. No Render, deixe a plataforma fornecer a porta. O servidor escuta em `0.0.0.0`. |
+| `APP_USERNAME` | Usuário da autenticação HTTP Basic. Deve ser configurado junto com `APP_PASSWORD`. |
+| `APP_PASSWORD` | Senha da aplicação, distinta da chave Gemini. Use uma senha forte e exclusiva. |
+| `NODE_ENV` | No Render, use `production`, como no blueprint. |
 
-## Busca web e segurança
+Sem usuário e senha, a aplicação fica **sem autenticação**. Com apenas um dos dois, o servidor recusa a inicialização. Recomenda-se configurar ambos, especialmente em qualquer publicação na internet. A rota `/healthz` é pública mesmo com autenticação habilitada.
 
-- Um prompt **não concede acesso à web**. A pesquisa só ocorre se o modelo/provedor tiver ferramentas disponíveis e executadas. Não foi implementado um executor de ferramentas no navegador. Respostas com `tool_calls` mostram uma mensagem orientando a configuração no servidor.
-- O token no JavaScript fica visível para quem tiver acesso à página e aos scripts carregados. Use esta versão somente em ambiente pessoal/local com credencial limitada. Não publique nem faça commit de um token real. Para hospedagem pública, use um backend/proxy que guarde o segredo e autentique as requisições.
-- Tailwind e fontes são carregados de terceiros e exigem internet. O CDN do Tailwind é adequado para protótipo; para publicação, gere o CSS e prefira assets locais.
-- Configure o CORS do 9Router para a origem exata do servidor estático, método POST e cabeçalhos `Authorization` e `Content-Type`, incluindo preflight OPTIONS. Não use `no-cors`: a resposta ficaria ilegível para JavaScript.
-- Uma página HTTPS pode bloquear um endpoint HTTP por conteúdo misto. Use origens compatíveis, HTTPS ou um proxy de mesma origem.
-- A página usa `textContent` para dados externos, rejeita esquemas de URL não HTTP/HTTPS e abre links com `noopener noreferrer`. Não coleta dados pessoais nem envia candidaturas.
+O servidor pode iniciar e exibir a interface sem chave Gemini, mas uma pesquisa retorna erro `503`. Um health check bem-sucedido não valida a chave nem o acesso ao provedor.
 
-## Tratamento de erros
+## Publicação no Render
 
-A interface trata configuração ausente, falha de conexão/CORS, erros HTTP, JSON inválido, formato incorreto, resposta truncada, chamadas de ferramentas não executadas e timeout de três minutos. Uma pesquisa que falha preserva os resultados anteriores. Não há repetição automática para evitar cobrança duplicada.
+Nesta documentação, a referência a “blender” é interpretada como **Render**, a plataforma de hospedagem, não o aplicativo Blender.
 
-## Verificação manual
+Publique este repositório como **um único Web Service**, com frontend e backend juntos. Mesmo tratando-o como um monorepo, ambos são servidos pelo mesmo processo. Use a **raiz do repositório**; não selecione `lib` ou `styles` como diretório raiz e não crie um Static Site separado.
 
-- Sem configurar as credenciais, clicar em buscar deve mostrar a orientação de configuração, sem chamar a API.
-- Com um gateway de teste, retorne um array com os cinco campos para conferir cards e filtros (`Cidade/MT - Presencial`, `Cidade/MT - Híbrido`, `Remoto - Brasil`).
-- Confira resposta vazia, JSON inválido, URL `javascript:`, HTTP 401/429 e timeout.
-- Valide a tela em celular e desktop e a navegação por teclado.
-- O teste real de pesquisa depende de um endpoint, credencial e modelo com browsing válidos; eles não acompanham o projeto.
+Antes do deploy, envie ao repositório remoto os arquivos da aplicação e o `package-lock.json` gerado por `npm install`, sem enviar `.env`.
+
+### Opção A: Blueprint
+
+1. No Render, escolha **New > Blueprint** e conecte o repositório e a branch desejada.
+2. Use o `render.yaml` da raiz. Ele declara apenas um serviço, `job-auto-search`, com runtime Node.
+3. Informe `GEMINI_API_KEY` no campo de configuração solicitado pelo Render (`sync: false`). Copie-a diretamente do AI Studio para o painel, nunca por chat ou commit.
+4. Confirme a criação. O blueprint define `NODE_ENV=production`, `GEMINI_MODEL=gemini-2.5-flash` e `APP_USERNAME=admin`, além de gerar `APP_PASSWORD` automaticamente.
+5. Abra o serviço criado e consulte **Environment** para recuperar o valor gerado de `APP_PASSWORD`. Guarde-o em um gerenciador de senhas. Essa senha não é a chave Gemini.
+6. Acesse a URL HTTPS do serviço. No diálogo de autenticação do navegador, use o usuário **admin** e a senha recuperada no painel.
+
+O blueprint solicita `plan: free`. Isso não garante disponibilidade permanente desse plano, ausência de suspensão por inatividade nem gratuidade da Gemini API. Confira as condições atuais de ambos os provedores.
+
+### Opção B: Web Service manual
+
+Em **New > Web Service**, conecte o mesmo repositório e configure:
+
+| Campo | Valor |
+| --- | --- |
+| Runtime | Node |
+| Root Directory | Deixe vazio para usar a raiz do repositório. |
+| Build Command | `npm ci --include=dev && npm run build` |
+| Start Command | `npm start` |
+| Health Check Path | `/healthz` |
+| Instâncias | Uma instância, recomendada para os controles em memória atuais. |
+
+O Tailwind é uma dependência de desenvolvimento; `--include=dev` garante sua instalação durante o build, mesmo com `NODE_ENV=production`. O requisito de Node 22.x está em `package.json`; confira a versão nos logs do build.
+
+Em **Environment**, configure `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-2.5-flash` e `NODE_ENV=production`. **Recomenda-se definir também as duas variáveis `APP_USERNAME` e `APP_PASSWORD`**, usando um usuário escolhido por você e uma senha forte. A configuração manual não gera automaticamente a senha do blueprint.
+
+Inicie o deploy e acompanhe os logs. Use a URL HTTPS fornecida pelo Render. Não configure CORS ou endpoint externo no HTML: o navegador chama a API na mesma origem. Para trocar segredos ou modelo, atualize **Environment** e aplique a alteração com reinicialização/redeploy.
+
+## Pesquisa, fontes e limites de confiança
+
+O prompt em `lib/search.js` usa um perfil fixo: Engenharia de Computação em formação, front-end na Infocorp UFMT, estágio em redes e infraestrutura na Aptum e suporte avançado. Prioriza front-end, redes, infraestrutura, suporte, DevOps e software júnior/pleno; orienta excluir liderança, sênior e híbrido fora de MT. Para personalizar esse perfil, altere o prompt no servidor e revise também os textos da interface.
+
+Cada chamada solicita pesquisa no Google, com preferência por anúncios individuais recentes e até 18 sugestões. A resposta deve conter exatamente `titulo`, `empresa`, `local`, `descricao` e `url`, todos strings não vazias. O backend valida formato, limites de tamanho e URLs HTTP(S) sem credenciais embutidas.
+
+O backend exige resposta finalizada com `STOP` e consultas não vazias em `groundingMetadata.webSearchQueries`. Uma lista não vazia também exige fontes válidas em `groundingChunks`. **Ausência de grounding, resposta interrompida, JSON inválido ou vagas sem fontes são erros, não uma pesquisa com zero resultados.** Uma lista vazia é aceita somente depois das verificações aplicáveis, incluindo confirmação de consultas.
+
+As fontes são as referências de grounding retornadas pelo Gemini. Isso não comprova que cada cartão corresponde a uma fonte específica, que a página foi inspecionada integralmente ou que a candidatura continua aberta. A aplicação não realiza verificação independente dos anúncios. Consulte os links originais antes de compartilhar dados ou se candidatar.
+
+### Sugestões do Google e iframe
+
+Quando a resposta inclui `searchEntryPoint.renderedContent`, a interface apresenta esse HTML em um **iframe com sandbox**, separado dos cartões. O iframe não permite scripts nem acesso de mesma origem; permite pop-ups, inclusive fora do sandbox, para navegação nos links. Os demais dados externos são apresentados com `textContent`, e links de cartões/fontes usam `noopener noreferrer`.
+
+Esse conteúdo representa as **Google Search suggestions** fornecidas pelo serviço. Antes de distribuir ou alterar a apresentação, confira os requisitos atuais de exibição, atribuição e uso na [documentação de grounding com Google Search](https://ai.google.dev/gemini-api/docs/google-search) e nos [termos da Gemini API](https://ai.google.dev/gemini-api/terms). O uso de sandbox não constitui certificação de conformidade com esses termos.
+
+## Cache, concorrência e custos
+
+- **Cache de 15 minutos:** resultados válidos, inclusive listas vazias, são compartilhados entre usuários do mesmo processo. Cliques nesse período reutilizam a resposta e exibem a data da pesquisa original; não forçam uma nova consulta ao Gemini.
+- **Cooldown de 1 minuto:** contado a partir do início de uma nova tentativa. Se ela falhar e ainda não tiver passado um minuto, outra tentativa é recusada com `429` e `Retry-After`. Falhas não são armazenadas como resultados vazios.
+- **Requisições simultâneas:** enquanto há uma pesquisa em andamento, chamadas concorrentes compartilham a mesma promessa, evitando chamadas duplicadas ao provedor dentro do processo.
+- **Deduplicação de sugestões:** usa empresa, título e local, ignorando diferenças de maiúsculas/minúsculas. Não é uma comparação semântica; anúncios equivalentes com textos diferentes ainda podem aparecer.
+- **Limite HTTP:** até 120 requisições por IP por minuto, incluindo acesso à interface e ao CSS, exceto `/healthz`. É independente das cotas Gemini.
+
+Cache, pesquisa pendente, cooldown e contadores são **somente em memória**. Reinícios, deploys ou retomadas após suspensão perdem esse estado. Múltiplas instâncias não compartilham esses controles e podem gerar pesquisas e custos duplicados. Recomenda-se **uma única instância**; escalar com os mesmos limites exige armazenamento e coordenação compartilhados, ainda não implementados.
+
+O modelo padrão é `gemini-2.5-flash`, mas disponibilidade, suporte a Search, região, quotas e cobrança dependem do projeto e das regras atuais do Google. Trocar `GEMINI_MODEL` não concede acesso automaticamente. Consulte [preços](https://ai.google.dev/gemini-api/docs/pricing), [limites](https://ai.google.dev/gemini-api/docs/rate-limits) e uso/faturamento do projeto. **Não há garantia de uso gratuito.** Cache e cooldown reduzem chamadas, mas não estabelecem um teto financeiro. Configure alertas e controles de quota disponíveis no provedor; alertas de orçamento não equivalem necessariamente a bloqueio de gastos.
+
+## Segurança e migração da versão antiga
+
+- Guarde `GEMINI_API_KEY` apenas no ambiente do servidor. A API usa a chave no cabeçalho `x-goog-api-key`; o navegador não precisa recebê-la.
+- Use HTTPS e autenticação no ambiente publicado. HTTP Basic não criptografa credenciais por si só. Sem autenticação, terceiros podem acionar pesquisas e consumir sua quota.
+- `/healthz` retorna apenas `{"status":"ok"}` e permanece público para o Render. As demais rotas passam pela autenticação, quando configurada.
+- Não coloque senhas em URLs, screenshots, logs, issues ou conversas. O prompt contém o perfil descrito neste README e é enviado ao Google; revise-o antes de incluir dados pessoais adicionais.
+- **Se a versão antiga continha um token no HTML, revogue-o no provedor e gere uma nova credencial.** Removê-lo do arquivo atual não elimina cópias no histórico Git, deploys antigos, forks ou caches. Revise o histórico e as publicações; se necessário, coordene a remoção do segredo do histórico com os colaboradores. Limpar o histórico não substitui a revogação.
+
+O modelo de configuração `.env.example` está vazio quanto a segredos. Nenhuma chave utilizável é fornecida nesta documentação; não envie uma chave para solicitar suporte.
+
+## Diagnóstico
+
+| Sintoma | O que conferir |
+| --- | --- |
+| `npm ci` falha no Render | Gere e versione `package-lock.json` com `npm install`; mantenha-o sincronizado com `package.json`. |
+| Tailwind não encontrado no build | Use exatamente `npm ci --include=dev && npm run build`. |
+| Página sem os estilos esperados / `/styles.css` retorna 404 | Execute o build e confirme a geração de `public/styles.css`. |
+| Servidor recusa iniciar | Configure `APP_USERNAME` e `APP_PASSWORD` juntos, ou deixe ambos ausentes/vazios apenas para uso sem proteção. |
+| Navegador solicita login / HTTP 401 | Use as credenciais da aplicação; no blueprint, usuário `admin` e senha gerada em **Environment**. |
+| HTTP 503 ao pesquisar | Configure `GEMINI_API_KEY` no servidor e reinicie/republique. |
+| Mensagem sobre modelo ou Google Search | Confira `GEMINI_MODEL`, acesso do projeto e compatibilidade com `google_search`. |
+| Mensagem de acesso negado pelo Gemini | Confira chave, projeto, região e faturamento. Não divulgue a chave ao investigar. |
+| HTTP 429 | Leia a mensagem: pode ser limite HTTP, cooldown local ou quota do Gemini. Aguarde o intervalo indicado ou revise quotas/faturamento. |
+| Erro de grounding, fontes ou formato | A resposta não atende ao contrato. Não interprete a falha como ausência de oportunidades. |
+| Timeout / HTTP 504 | A chamada ao Gemini tem limite de 110 segundos; o navegador aguarda até 125 segundos. Verifique rede/provedor e tente depois. |
+| HTTP 415 ou 403 ao chamar a API | `POST /api/jobs` exige `Content-Type: application/json` e rejeita requisições marcadas pelo navegador como `cross-site`. |
+
+A interface mantém os resultados e as fontes anteriores quando uma atualização falha. Não há repetição automática. O botão desabilitado durante a pesquisa evita cliques repetidos na mesma página, mas não substitui os controles do servidor.
+
+## Verificação após configurar
+
+Os passos a seguir são um roteiro manual, **não uma declaração de testes executados**. Não foi realizada pesquisa real com uma chave Gemini para validar esta documentação.
+
+1. Confira Node 22.x, instalação e build; inicie a aplicação.
+2. Acesse `/healthz` e confirme o JSON de saúde. Essa rota não chama o Gemini.
+3. Confira layout e filtros no desktop e no celular, além da navegação por teclado.
+4. Com autenticação configurada, confirme o desafio de login em uma janela privada e o acesso público apenas ao health check.
+5. Com sua própria chave configurada de forma privada, realize uma busca sabendo que ela pode ser cobrada. Confira sugestões, fontes, links e horário; não trate os cartões como anúncios verificados.
+6. Repita dentro de 15 minutos e confira a indicação de cache. Os filtros locais não geram chamadas ao provedor.
+7. Em ambiente de teste, confira tratamento de chave ausente, resposta inválida, falta de grounding, lista vazia válida e falha após resultados anteriores.
+
+Execute `npm test` para rodar os testes em `test/app.test.js`. Eles usam respostas simuladas, sem chave nem custos: validam grounding, deduplicação, URLs inseguras, requisição ao provedor, cache, autenticação, arquivos privados e erros. Esses testes não comprovam disponibilidade do modelo ou funcionamento da integração real na sua conta.

@@ -1,0 +1,17 @@
+{
+  "name": "job-auto-search",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "build": "tailwindcss -i ./styles/input.css -o ./public/styles.css --minify",
+    "start": "node --env-file-if-exists=.env server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.0"
+  },
+  "devDependencies": { "tailwindcss": "^3.4.17" }
+}
