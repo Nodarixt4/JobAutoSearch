@@ -28,8 +28,8 @@ test('request actually enables Google Search and keeps key in header', async () 
     assert.equal(options.headers['x-goog-api-key'], 'test-key');
     const body = JSON.parse(options.body);
     assert.deepEqual(body.tools, [{ google_search: {} }]);
-    assert.equal(body.generationConfig.maxOutputTokens, 4096);
-    assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'low' });
+    assert.equal(body.generationConfig.maxOutputTokens, 8192);
+    assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'minimal' });
     return Response.json(payload());
   } });
   assert.equal(result.jobs.length, 1);

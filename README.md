@@ -109,7 +109,7 @@ Inicie o deploy e acompanhe os logs. Use a URL HTTPS fornecida pelo Render. Não
 
 O prompt em `lib/search.js` usa um perfil fixo: Engenharia de Computação em formação, front-end na Infocorp UFMT, estágio em redes e infraestrutura na Aptum e suporte avançado. Prioriza front-end, redes, infraestrutura, suporte, DevOps e software júnior/pleno; orienta excluir liderança, sênior e híbrido fora de MT. Para personalizar esse perfil, altere o prompt no servidor e revise também os textos da interface.
 
-Cada chamada solicita pesquisa no Google, com preferência por anúncios individuais recentes e até 10 sugestões. A resposta deve conter exatamente `titulo`, `empresa`, `local`, `descricao` e `url`, todos strings não vazias. O backend valida formato, limites de tamanho e URLs HTTP(S) sem credenciais embutidas. O raciocínio usa nível baixo nos modelos Gemini 3 para reduzir latência e custo.
+Cada chamada solicita pesquisa no Google, com preferência por anúncios individuais recentes e até 8 sugestões. A resposta deve conter exatamente `titulo`, `empresa`, `local`, `descricao` e `url`, todos strings não vazias. O backend valida formato, limites de tamanho e URLs HTTP(S) sem credenciais embutidas. O raciocínio usa nível mínimo nos modelos Gemini 3 para reduzir latência e reservar mais tokens para a resposta.
 
 O backend exige resposta finalizada com `STOP` e consultas não vazias em `groundingMetadata.webSearchQueries`. Uma lista não vazia também exige fontes válidas em `groundingChunks`. **Ausência de grounding, resposta interrompida, JSON inválido ou vagas sem fontes são erros, não uma pesquisa com zero resultados.** Uma lista vazia é aceita somente depois das verificações aplicáveis, incluindo confirmação de consultas.
 
