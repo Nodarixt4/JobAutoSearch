@@ -1,6 +1,6 @@
 # JobAutoSearch
 
-Agregador de oportunidades com Node.js/Express. Remotive e Arbeitnow funcionam sem chave; Gemini com Google Search e opcional. Nao envia candidaturas nem contorna login ou CAPTCHA. Confirme disponibilidade e legitimidade no anuncio original.
+Agregador de oportunidades exclusivamente de TI com Node.js/Express. Remotive e Arbeitnow funcionam sem chave; Gemini com Google Search e opcional. Nao envia candidaturas nem contorna login ou CAPTCHA. Confirme disponibilidade e legitimidade no anuncio original.
 
 ## Execucao
 
@@ -20,13 +20,13 @@ No Render, use um Web Service na raiz, build `npm ci --include=dev && npm run bu
 
 ## Contrato HTTP
 
-`GET /api/options` retorna `{categories:[{id,label}], providers:[{id,label,enabled}]}`. IDs de categorias: technology, design, marketing, sales, support, finance, hr, operations, education, health, engineering, agro, logistics, retail, legal, construction, hospitality, security, food, maintenance, other. Provedores: remotive, arbeitnow, gemini. Gemini sem chave aparece desabilitado; presenca de chave nao comprova acesso ou quota.
+`GET /api/options` retorna `{categories:[{id,label}], providers:[{id,label,enabled}]}`. IDs de categorias TI: frontend, backend, fullstack, mobile, qa, devops, cloud, data, ai, security, infrastructure, support, ux, management, software. Software cobre desenvolvimento generico; support significa suporte tecnico de TI e security significa seguranca da informacao, nunca atendimento generico ou seguranca patrimonial. Provedores: remotive, arbeitnow, gemini. Gemini sem chave aparece desabilitado; presenca de chave nao comprova acesso ou quota.
 
 `POST /api/jobs` exige Content-Type application/json. Corpo opcional `{}` e compativel:
 
 | Campo | Valores e limites | Padrao |
 | --- | --- | --- |
-| categories | Array de IDs de /api/options, ate 21 entradas | [] (todas) |
+| categories | Array de IDs de /api/options, ate 15 entradas | [] (todas as especialidades TI) |
 | keywords | String livre, ate 200 caracteres | vazio |
 | location | String livre opcional, ate 120 caracteres | vazio |
 | modality | all, remote, hybrid, onsite | all |
@@ -43,7 +43,7 @@ Gemini preserva ainda researchText e groundingMetadata originais; os indices de 
 
 ## Filtros e limitacoes
 
-- Categorias combinam com OR e sinonimos PT/EN no titulo, descricao e tags. Outras areas significa ausencia de correspondencia nas demais categorias, nao uma taxonomia universal. Termos livres combinam com AND por palavra (substrings) em titulo, descricao, tags e empresa; nao executam expressoes ou instrucoes.
+- Categorias combinam com OR e padroes especificos PT/EN no titulo, descricao e tags. Selecao vazia ou omitida aplica todo o catalogo TI, nunca vagas generalistas. IDs antigos removidos retornam 400. Palavras isoladas como sales, support e engineer nao qualificam uma vaga como TI. Termos livres combinam com AND por palavra (substrings) em titulo, descricao, tags e empresa; nao executam expressoes ou instrucoes nem ampliam o catalogo. A classificacao textual pode gerar falsos positivos por mencoes incidentais a TI na descricao e falsos negativos por nomenclaturas nao reconhecidas; nao ha garantia semantica.
 - Politica geografica obrigatoria inclusive com `{}`: remoto exige Brasil/Brazil, America Latina/Latin America/LATAM ou alcance mundial explicito no campo local. Apenas remoto nao basta. Presencial/hibrido exige MT/Mato Grosso ou cidade reconhecida: Cuiaba, Varzea Grande, Rondonopolis, Sinop, Sorriso, Lucas do Rio Verde, Tangara da Serra, Alta Floresta, Primavera do Leste. MS/Mato Grosso do Sul, Campo Grande, Dourados e Tres Lagoas sao excluidos. O filtro local adicional restringe por substring normalizada, nunca amplia essa politica.
 - Remotive e remoto. Arbeitnow remote=false **nao** prova presencial: exige modalidade explicita no local/titulo. Local/modalidade desconhecidos sao excluidos; senioridade desconhecida permanece. Descricao nao comprova localidade nem modalidade. Nao ha geocodificacao, verificacao de visto ou garantia legal de elegibilidade. Inferencias textuais e lista conservadora de cidades podem causar falsos positivos/negativos; confira restricoes no anuncio original.
 - Remotive usa https://remotive.com/api/remote-jobs ([documentacao](https://github.com/remotive-com/remote-jobs-api)). Arbeitnow usa https://www.arbeitnow.com/api/job-board-api ([documentacao](https://www.arbeitnow.com/blog/job-board-api)). Sao feeds internacionais com forte foco remoto/Europa, nao uma cobertura exaustiva de vagas brasileiras. Vagas remotas podem restringir pais ou fuso.
@@ -53,7 +53,7 @@ Gemini preserva ainda researchText e groundingMetadata originais; os indices de 
 
 ## Cache, seguranca e custos
 
-Gemini recebe os IDs e nomes das categorias selecionadas e a politica Brasil/MT na pesquisa; a extracao recebe novamente filtros e politica. O backend filtra tambem seus resultados. Seu limite individual continua em 40 anuncios/8192 tokens, independente do teto agregado de 200. Nenhuma API externa nova foi adicionada ou validada ao vivo.
+Gemini recebe os IDs e nomes das categorias selecionadas (todo o catalogo TI quando vazias) e a politica Brasil/MT na pesquisa; pesquisa e extracao exigem exclusivamente TI. A extracao recebe novamente filtros e politica. O backend filtra tambem seus resultados. Seu limite individual continua em 40 anuncios/8192 tokens, independente do teto agregado de 200. Nenhuma API externa nova foi adicionada ou validada ao vivo.
 
 Cache por consulta normalizada: 15 minutos, ate 100 entradas, expulsao da mais antiga. Mesma chave em andamento compartilha promessa. Falhas totais e respostas parciais com erro nao entram no cache de consultas. Feeds publicos tem cache/promessa separado por provedor por 15 minutos (no maximo dois feeds), permitindo mudar filtros sem repetir downloads ou impor cooldown global. Dados podem ter a idade desse cache; searchedAt indica agregacao, nao publicacao/verificacao da vaga.
 
@@ -63,4 +63,4 @@ Chaves Gemini ficam em cabecalho x-goog-api-key no servidor, nunca no HTML, URL 
 
 ## Arquivos e testes
 
-`lib/jobs.js`: contrato, filtros, adaptadores, agregacao e feeds. `lib/search.js`: Gemini e grounding. `server.js`: HTTP, autenticacao e controles. `test/app.test.js` e `test/jobs.test.js`: mocks de grounding, schemas, falhas parciais, validacao, filtros, limites, cache, concorrencia e seguranca HTTP. Testes nao garantem disponibilidade externa. Frontend e estilos nao sao alterados por esta implementacao; cliente antigo que envia {} continua funcionando, mas deve consumir /api/options e os avisos para expor o contrato completo.
+`lib/jobs.js`: contrato, filtros, adaptadores, agregacao e feeds. `lib/search.js`: Gemini e grounding. `server.js`: HTTP, autenticacao e controles. `test/app.test.js` e `test/jobs.test.js`: mocks de grounding, schemas, falhas parciais, validacao, filtros, limites, cache, concorrencia e seguranca HTTP, incluindo as 15 especialidades PT/EN e rejeicao de areas alheias a TI. Testes nao garantem disponibilidade externa. Frontend explica a selecao vazia e mantem descricoes dos cartoes limitadas a 300 caracteres. Cliente que envia {} continua funcionando, agora restrito ao catalogo TI; deve consumir /api/options e os avisos para expor o contrato completo.

@@ -8,14 +8,14 @@ const mock = async url => Response.json(url.includes('remotive') ? { jobs: [row]
 test('normalization, defaults, invalid enums, shapes and limits', () => {
   assert.deepEqual(normalizeQuery().providers, ['arbeitnow', 'remotive']);
   assert.equal(normalizeQuery({ keywords: '  SÊNIOR  Java ' }).keywords, 'senior java');
-  assert.deepEqual(normalizeQuery({ categories: ['sales', 'design', 'sales'] }).categories, ['design', 'sales']);
+  assert.deepEqual(normalizeQuery({ categories: ['software', 'frontend', 'software'] }).categories, ['frontend', 'software']);
   for (const body of [null, [], { providers: [] }, { categories: ['invalid'] }, { keywords: 3 }, { location: 'a'.repeat(121) }, { modality: 'office' }, { seniority: 'expert' }, { key: 'secret' }]) {
     assert.throws(() => normalizeQuery(body), error => error.status === 400);
   }
   assert.equal(options('').providers.find(p => p.id === 'gemini').enabled, false);
 });
 test('real provider schemas map exact job contract and PT/EN filters', async () => {
-  const result = await aggregateJobs({ fetchImpl: mock, query: normalizeQuery({ categories: ['technology'], keywords: 'software', location: 'brazil', modality: 'remote', seniority: 'junior' }) });
+  const result = await aggregateJobs({ fetchImpl: mock, query: normalizeQuery({ categories: ['software'], keywords: 'software', location: 'brazil', modality: 'remote', seniority: 'junior' }) });
   assert.equal(result.jobs.length, 1);
   assert.deepEqual(Object.keys(result.jobs[0]), ['titulo', 'empresa', 'local', 'descricao', 'url']);
   assert.doesNotMatch(result.jobs[0].descricao, /<p>/);
@@ -79,14 +79,58 @@ test('geographic policy applies without filters and cannot be relaxed', async ()
     assert.equal(result.jobs.length, expected, location);
   }
 });
-test('new categories are selectable and match Portuguese and English', async () => {
-  for (const [category, title] of [['agro', 'Agronomo'], ['logistics', 'Warehouse assistant'], ['retail', 'Repositor'],
-    ['legal', 'Advogado'], ['construction', 'Pedreiro'], ['hospitality', 'Hotel receptionist'], ['security', 'Vigilante']]) {
-    const result = await aggregateJobs({ query: normalizeQuery({ categories: [category], providers: ['remotive'] }),
-      fetchImpl: async () => Response.json({ jobs: [{ ...row, title }] }) });
-    assert.equal(result.jobs.length, 1, category);
+const specialties = [
+  ['frontend', 'Front-end Developer', 'Desenvolvedor frontend'],
+  ['backend', 'Backend Engineer', 'Desenvolvedora back-end'],
+  ['fullstack', 'Full Stack Developer', 'Desenvolvedor fullstack'],
+  ['mobile', 'Mobile Developer', 'Desenvolvedora Android'],
+  ['qa', 'QA Engineer', 'Analista de testes'],
+  ['devops', 'Site Reliability Engineer', 'Especialista DevOps'],
+  ['cloud', 'Cloud Architect', 'Engenheira de nuvem'],
+  ['data', 'Data Scientist', 'Analista de dados'],
+  ['ai', 'Machine Learning Engineer', 'Especialista em inteligencia artificial'],
+  ['security', 'Information Security Analyst', 'Analista de seguranca da informacao'],
+  ['infrastructure', 'Network Administrator', 'Analista de redes'],
+  ['support', 'IT Support', 'Suporte tecnico de informatica'],
+  ['ux', 'UX Designer', 'Designer de produtos digitais'],
+  ['management', 'IT Manager', 'Gerente de tecnologia'],
+  ['software', 'Software Engineer', 'Desenvolvimento de software']
+];
+test('TI catalog matches PT/EN specialties with explicit and empty selection', async () => {
+  assert.deepEqual(options().categories.map(c => c.id), specialties.map(([id]) => id));
+  assert.equal(normalizeQuery({ categories: options().categories.map(c => c.id) }).categories.length, 15);
+  for (const [category, ...titles] of specialties) {
+    for (const title of titles) {
+      for (const categories of [[category], []]) {
+        const result = await aggregateJobs({ query: normalizeQuery({ categories, providers: ['remotive'] }),
+          fetchImpl: async () => Response.json({ jobs: [{ ...row, title, description: '', tags: [] }] }) });
+        assert.equal(result.jobs.length, 1, `${category}: ${title}`);
+      }
+    }
   }
-  assert.equal(normalizeQuery({ categories: options().categories.map(c => c.id) }).categories.length, 21);
+});
+test('empty or omitted selection rejects non-TI jobs and generic words', async () => {
+  const titles = ['Sales Representative', 'Customer Support', 'Civil Engineer', 'Vigilante', 'Security Guard',
+    'Advogado', 'Agronomo', 'Marketing', 'Business Developer', 'Professor', 'Enfermeiro', 'Designer grafico',
+    'Suporte ao cliente', 'Gerente de loja', 'Auxiliar administrativo', 'Maintenance Engineer', 'Food Scientist'];
+  for (const filter of [{}, { categories: [] }, { categories: options().categories.map(c => c.id) }]) {
+    const result = await aggregateJobs({ query: normalizeQuery({ ...filter, providers: ['remotive'] }),
+      fetchImpl: async () => Response.json({ jobs: titles.map((title, i) => ({ ...row, title,
+        description: title, category: '', tags: [], company_name: 'Software Developer Inc', url: `https://example.com/${i}` })) }) });
+    assert.deepEqual(result.jobs, []);
+  }
+  for (const id of ['technology', 'design', 'sales', 'agro', 'legal', 'other']) {
+    assert.throws(() => normalizeQuery({ categories: [id] }), error => error.status === 400);
+  }
+});
+test('specialty selection restricts results and honors description and tags', async () => {
+  const result = await aggregateJobs({ query: normalizeQuery({ categories: ['backend'], providers: ['remotive'] }),
+    fetchImpl: async () => Response.json({ jobs: [
+      { ...row, title: 'Frontend Developer', description: '', url: 'https://example.com/front' },
+      { ...row, title: 'Especialista', description: 'Desenvolvimento back-end', url: 'https://example.com/back' },
+      { ...row, title: 'Especialista', description: '', tags: ['backend'], url: 'https://example.com/tag', company_name: 'Other' }
+    ] }) });
+  assert.deepEqual(result.jobs.map(job => job.url), ['https://example.com/back', 'https://example.com/tag']);
 });
 test('Arbeitnow pagination is bounded, cached and counts each request against budget', async () => {
   let calls = 0; let budgets = 0; const feeds = new Map();
@@ -133,13 +177,24 @@ test('pagination ends cleanly and budget exhaustion preserves first page', async
   }
 });
 test('Gemini results also pass geographic policy and receive selected categories', async () => {
-  const result = await aggregateJobs({ apiKey: 'test', query: normalizeQuery({ providers: ['gemini'], categories: ['legal'] }),
+  const result = await aggregateJobs({ apiKey: 'test', query: normalizeQuery({ providers: ['gemini'], categories: ['security'] }),
     gemini: async ({ query }) => {
-      assert.deepEqual(query.categories, ['legal']);
+      assert.deepEqual(query.categories, ['security']);
       return { jobs: ['Brazil - Remoto', 'US only - Remoto', 'Cuiaba MT - Presencial', 'Campo Grande MS - Presencial'].map((local, i) =>
-        ({ titulo: 'Advogado', empresa: 'Example', descricao: 'Juridico', local, url: `https://example.com/${i}` })) };
+        ({ titulo: 'Analista de seguranca da informacao', empresa: 'Example', descricao: '', local, url: `https://example.com/${i}` })) };
     } });
   assert.equal(result.jobs.length, 2);
+});
+test('empty selection applies TI filtering to Arbeitnow and Gemini too', async () => {
+  for (const provider of ['arbeitnow', 'gemini']) {
+    const titles = ['Sales Representative', 'Customer Support', 'Security Guard', 'Software Engineer'];
+    const result = await aggregateJobs({ apiKey: 'test', query: normalizeQuery({ providers: [provider] }),
+      fetchImpl: async () => Response.json({ data: titles.map((title, i) => ({ ...row, title, description: '',
+        location: 'Brazil', remote: true, url: `https://example.com/${i}` })) }),
+      gemini: async () => ({ jobs: titles.map((titulo, i) => ({ titulo, empresa: 'Example', descricao: '',
+        local: 'Brazil - Remoto', url: `https://example.com/${i}` })) }) });
+    assert.deepEqual(result.jobs.map(job => job.titulo), ['Software Engineer'], provider);
+  }
 });
 test('HTTP options, normalized cache, distinct filters and bad JSON', async t => {
   let calls = 0;
