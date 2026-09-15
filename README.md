@@ -111,7 +111,7 @@ O prompt em `lib/search.js` usa um perfil fixo: Engenharia de Computação em fo
 
 Cada chamada solicita pesquisa no Google, com preferência por anúncios individuais recentes e até 8 sugestões. A resposta deve conter exatamente `titulo`, `empresa`, `local`, `descricao` e `url`, todos strings não vazias. O backend valida formato, limites de tamanho e URLs HTTP(S) sem credenciais embutidas. O raciocínio usa nível mínimo nos modelos Gemini 3 para reduzir latência e reservar mais tokens para a resposta.
 
-O backend exige resposta finalizada com `STOP` e consultas não vazias em `groundingMetadata.webSearchQueries`. Uma lista não vazia também exige fontes válidas em `groundingChunks`. **Ausência de grounding, resposta interrompida, JSON inválido ou vagas sem fontes são erros, não uma pesquisa com zero resultados.** Uma lista vazia é aceita somente depois das verificações aplicáveis, incluindo confirmação de consultas.
+O backend exige resposta finalizada com `STOP` e consultas não vazias em `groundingMetadata.webSearchQueries` ou fontes web válidas em `groundingChunks`. Uma lista não vazia também exige fontes válidas. Se faltar grounding, realiza uma única nova tentativa com instrução reforçada de pesquisa, dentro do mesmo prazo total de 110 segundos. Essa tentativa pode gerar cobrança adicional e não garante que o modelo utilize a ferramenta. Os logs registram modelo e tentativa, sem chave ou conteúdo da resposta. **Ausência persistente de grounding, resposta interrompida, JSON inválido ou vagas sem fontes são erros, não uma pesquisa com zero resultados.**
 
 As fontes são as referências de grounding retornadas pelo Gemini. Isso não comprova que cada cartão corresponde a uma fonte específica, que a página foi inspecionada integralmente ou que a candidatura continua aberta. A aplicação não realiza verificação independente dos anúncios. Consulte os links originais antes de compartilhar dados ou se candidatar.
 
@@ -160,7 +160,7 @@ O modelo de configuração `.env.example` está vazio quanto a segredos. Nenhuma
 | Timeout / HTTP 504 | A chamada ao Gemini tem limite de 110 segundos; o navegador aguarda até 125 segundos. Verifique rede/provedor e tente depois. |
 | HTTP 415 ou 403 ao chamar a API | `POST /api/jobs` exige `Content-Type: application/json` e rejeita requisições marcadas pelo navegador como `cross-site`. |
 
-A interface mantém os resultados e as fontes anteriores quando uma atualização falha. Não há repetição automática. O botão desabilitado durante a pesquisa evita cliques repetidos na mesma página, mas não substitui os controles do servidor.
+A interface mantém os resultados e as fontes anteriores quando uma atualização falha. Não há repetição automática no navegador; o servidor repete apenas uma resposta sem grounding, no máximo uma vez. O botão desabilitado durante a pesquisa evita cliques repetidos na mesma página, mas não substitui os controles do servidor.
 
 ## Verificação após configurar
 

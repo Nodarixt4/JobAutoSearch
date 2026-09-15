@@ -59,6 +59,52 @@ test('logs unfinished response reason without exposing response content', async 
   }]);
 });
 
+test('retries missing grounding once using the same deadline', async () => {
+  const raw = payload();
+  delete raw.candidates[0].groundingMetadata;
+  const requests = [];
+  const warnings = [];
+  const result = await searchJobs({
+    apiKey: 'test-key',
+    logger: { warn: (...args) => warnings.push(args) },
+    fetchImpl: async (_url, options) => {
+      requests.push(options);
+      return Response.json(requests.length === 1 ? raw : payload());
+    }
+  });
+  assert.equal(result.jobs.length, 1);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].signal, requests[1].signal);
+  assert.match(JSON.parse(requests[1].body).contents[0].parts[0].text, /tentativa anterior/);
+  assert.deepEqual(warnings, [['Gemini response missing grounding', { model: 'gemini-3.6-flash', attempt: 1 }]]);
+});
+
+test('never accepts ungrounded empty results after retry', async () => {
+  const raw = payload([]);
+  delete raw.candidates[0].groundingMetadata;
+  let calls = 0;
+  await assert.rejects(searchJobs({
+    apiKey: 'test-key', logger: { warn() {} },
+    fetchImpl: async () => { calls++; return Response.json(raw); }
+  }), error => error.status === 502 && error.code === 'MISSING_GROUNDING');
+  assert.equal(calls, 2);
+});
+
+test('does not retry malformed grounded responses or upstream errors', async () => {
+  for (const response of [() => {
+    const raw = payload();
+    raw.candidates[0].content.parts[0].text = 'invalid json';
+    return Response.json(raw);
+  }, () => new Response('', { status: 429 })]) {
+    let calls = 0;
+    await assert.rejects(searchJobs({
+      apiKey: 'test-key', logger: { warn() {} },
+      fetchImpl: async () => { calls++; return response(); }
+    }), SearchError);
+    assert.equal(calls, 1);
+  }
+});
+
 async function serve(t, options) {
   const server = createApp(options).listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
