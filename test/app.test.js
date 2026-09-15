@@ -34,7 +34,8 @@ test('request actually enables Google Search and keeps key in header', async () 
     const body = JSON.parse(options.body);
     assert.deepEqual(body.tools, [{ google_search: {} }]);
     assert.equal(body.generationConfig.maxOutputTokens, 8192);
-    assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'minimal' });
+    assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'medium' });
+    assert.match(body.contents[0].parts[0].text, /exige o uso da ferramenta Google Search/);
     return Response.json(payload());
   } });
   assert.equal(result.jobs.length, 1);
