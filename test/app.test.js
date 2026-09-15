@@ -28,17 +28,29 @@ test('reject ungrounded results, unsafe URLs and truncated output', () => {
   assert.throws(() => parseSearch(truncated), /limite de resposta/);
 });
 test('request actually enables Google Search and keeps key in header', async () => {
+  let calls = 0;
   const result = await searchJobs({ apiKey: 'test-key', fetchImpl: async (url, options) => {
+    calls++;
+    assert.match(url, /models\/gemini-3\.6-flash:generateContent$/);
     assert.ok(!url.includes('test-key'));
     assert.equal(options.headers['x-goog-api-key'], 'test-key');
     const body = JSON.parse(options.body);
-    assert.deepEqual(body.tools, [{ google_search: {} }]);
+    if (calls === 1) {
+      assert.deepEqual(body.tools, [{ google_search: {} }]);
+      assert.equal(body.generationConfig.responseMimeType, undefined);
+      assert.doesNotMatch(body.contents[0].parts[0].text, /JSON/);
+      assert.match(body.contents[0].parts[0].text, /exige o uso da ferramenta Google Search/);
+    } else {
+      assert.equal(body.tools, undefined);
+      assert.equal(body.generationConfig.responseMimeType, 'application/json');
+      assert.equal(body.generationConfig.responseJsonSchema.maxItems, 8);
+    }
     assert.equal(body.generationConfig.maxOutputTokens, 8192);
     assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'medium' });
-    assert.match(body.contents[0].parts[0].text, /exige o uso da ferramenta Google Search/);
     return Response.json(payload());
   } });
   assert.equal(result.jobs.length, 1);
+  assert.equal(calls, 2);
   await assert.rejects(searchJobs({}), error => error.status === 503);
   await assert.rejects(searchJobs({ apiKey: 'test', fetchImpl: async () => new Response('', { status: 429 }) }), error => error.status === 429);
 });
@@ -74,8 +86,9 @@ test('retries missing grounding once using the same deadline', async () => {
     }
   });
   assert.equal(result.jobs.length, 1);
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 3);
   assert.equal(requests[0].signal, requests[1].signal);
+  assert.equal(requests[0].signal, requests[2].signal);
   assert.match(JSON.parse(requests[1].body).contents[0].parts[0].text, /tentativa anterior/);
   assert.deepEqual(warnings, [['Gemini response missing grounding', { model: 'gemini-3.6-flash', attempt: 1 }]]);
 });
@@ -91,19 +104,85 @@ test('never accepts ungrounded empty results after retry', async () => {
   assert.equal(calls, 2);
 });
 
-test('does not retry malformed grounded responses or upstream errors', async () => {
-  for (const response of [() => {
+test('does not retry malformed extraction or upstream errors', async () => {
+  for (const [expectedCalls, response] of [[2, () => {
     const raw = payload();
     raw.candidates[0].content.parts[0].text = 'invalid json';
     return Response.json(raw);
-  }, () => new Response('', { status: 429 })]) {
+  }], [1, () => new Response('', { status: 429 })]]) {
     let calls = 0;
     await assert.rejects(searchJobs({
       apiKey: 'test-key', logger: { warn() {} },
       fetchImpl: async () => { calls++; return response(); }
     }), SearchError);
-    assert.equal(calls, 1);
+    assert.equal(calls, expectedCalls);
   }
+});
+
+test('natural research preserves original metadata and ignores extraction grounding', async () => {
+  const research = payload();
+  research.candidates[0].content.parts = [{ thought: true, text: 'private thought' },
+    { text: 'Suporte na Empresa de teste em Cuiaba. Fonte [1].' }];
+  const metadata = research.candidates[0].groundingMetadata;
+  metadata.searchEntryPoint = { renderedContent: '<div>Google suggestions</div>' };
+  metadata.groundingSupports = [{ segment: { text: 'Suporte na Empresa de teste' }, groundingChunkIndices: [0] }];
+  let calls = 0;
+  const result = await searchJobs({ apiKey: 'test', fetchImpl: async (_url, options) => {
+    if (++calls === 1) return Response.json(research);
+    const input = JSON.parse(JSON.parse(options.body).contents[0].parts[0].text);
+    assert.doesNotMatch(input.research, /private thought/);
+    assert.deepEqual(input.groundingSupports, metadata.groundingSupports);
+    const extracted = payload();
+    delete extracted.candidates[0].groundingMetadata;
+    return Response.json(extracted);
+  } });
+  assert.deepEqual(result.groundingMetadata, metadata);
+  assert.equal(result.searchEntryPoint, metadata.searchEntryPoint.renderedContent);
+  assert.match(result.researchText, /Fonte/);
+});
+
+test('rejects fabricated links even if extraction supplies its own grounding', () => {
+  const invented = { ...job, url: 'https://example.com/jobs/invented' };
+  const extracted = payload([invented]);
+  extracted.candidates[0].groundingMetadata.groundingChunks[0].web.uri = invented.url;
+  assert.throws(() => parseSearch(extracted, payload()), error => error.code === 'UNSUPPORTED_SOURCE');
+  const redirect = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/test';
+  const research = payload();
+  research.candidates[0].groundingMetadata.groundingChunks[0].web.uri = redirect;
+  assert.equal(parseSearch(payload([{ ...job, url: redirect }]), research).jobs[0].url, redirect);
+});
+
+test('query-only research permits only empty extraction', () => {
+  const research = payload();
+  research.candidates[0].groundingMetadata.groundingChunks = [];
+  assert.deepEqual(parseSearch(payload([]), research).jobs, []);
+  assert.throws(() => parseSearch(payload(), research), /sem fontes/);
+});
+
+test('extraction failures never retry or become empty success', async () => {
+  for (const failure of ['SAFETY', 'MAX_TOKENS', 'timeout', '429']) {
+    let calls = 0;
+    await assert.rejects(searchJobs({ apiKey: 'test', logger: { warn() {} }, fetchImpl: async () => {
+      if (++calls === 1) return Response.json(payload());
+      if (failure === 'timeout') throw new DOMException('test', 'TimeoutError');
+      if (failure === '429') return new Response('', { status: 429 });
+      const raw = payload();
+      raw.candidates[0].finishReason = failure;
+      return Response.json(raw);
+    } }), error => error instanceof SearchError && error.status === (failure === 'timeout' ? 504 : failure === '429' ? 429 : 502));
+    assert.equal(calls, 2);
+  }
+});
+
+test('empty research text is an error without extraction', async () => {
+  let calls = 0;
+  const raw = payload();
+  raw.candidates[0].content.parts = [];
+  await assert.rejects(searchJobs({ apiKey: 'test', fetchImpl: async () => {
+    calls++;
+    return Response.json(raw);
+  } }), /sem texto/);
+  assert.equal(calls, 1);
 });
 
 async function serve(t, options) {
