@@ -43,7 +43,7 @@ test('request actually enables Google Search and keeps key in header', async () 
     } else {
       assert.equal(body.tools, undefined);
       assert.equal(body.generationConfig.responseMimeType, 'application/json');
-      assert.equal(body.generationConfig.responseJsonSchema.maxItems, 8);
+      assert.equal(body.generationConfig.responseJsonSchema.maxItems, 40);
     }
     assert.equal(body.generationConfig.maxOutputTokens, 8192);
     assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'medium' });
@@ -226,8 +226,8 @@ test('authentication, health and cross-site guard', async t => {
   assert.equal((await fetch(base, { headers: { authorization } })).status, 200);
   assert.equal((await fetch(`${base}/api/jobs`, { ...post, headers: { ...post.headers, authorization, 'sec-fetch-site': 'cross-site' } })).status, 403);
 });
-test('upstream failure is not cached and cooldown blocks immediate retry', async t => {
+test('upstream failure is not cached and does not globally block retry', async t => {
   const base = await serve(t, { env: {}, search: async () => { throw new SearchError('Falha de teste', 503); } });
   assert.equal((await fetch(`${base}/api/jobs`, post)).status, 503);
-  assert.equal((await fetch(`${base}/api/jobs`, post)).status, 429);
+  assert.equal((await fetch(`${base}/api/jobs`, post)).status, 503);
 });

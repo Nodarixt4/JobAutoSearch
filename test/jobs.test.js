@@ -1,0 +1,85 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { aggregateJobs, normalizeQuery, options, readJson } from '../lib/jobs.js';
+import { createApp } from '../server.js';
+
+const row = { title: 'Junior Software Developer', company_name: 'Example', candidate_required_location: 'Brazil', description: '<p>Desenvolvimento de software</p>', url: 'https://example.com/job' };
+const mock = async url => Response.json(url.includes('remotive') ? { jobs: [row] } : { data: [{ ...row, location: 'Berlin', remote: false, title: 'Senior Marketing', url: 'https://example.com/2' }] });
+test('normalization, defaults, invalid enums, shapes and limits', () => {
+  assert.deepEqual(normalizeQuery().providers, ['arbeitnow', 'remotive']);
+  assert.equal(normalizeQuery({ keywords: '  SÊNIOR  Java ' }).keywords, 'senior java');
+  assert.deepEqual(normalizeQuery({ categories: ['sales', 'design', 'sales'] }).categories, ['design', 'sales']);
+  for (const body of [null, [], { providers: [] }, { categories: ['invalid'] }, { keywords: 3 }, { location: 'a'.repeat(121) }, { modality: 'office' }, { seniority: 'expert' }, { key: 'secret' }]) {
+    assert.throws(() => normalizeQuery(body), error => error.status === 400);
+  }
+  assert.equal(options('').providers.find(p => p.id === 'gemini').enabled, false);
+});
+test('real provider schemas map exact job contract and PT/EN filters', async () => {
+  const result = await aggregateJobs({ fetchImpl: mock, query: normalizeQuery({ categories: ['technology'], keywords: 'software', location: 'brazil', modality: 'remote', seniority: 'junior' }) });
+  assert.equal(result.jobs.length, 1);
+  assert.deepEqual(Object.keys(result.jobs[0]), ['titulo', 'empresa', 'local', 'descricao', 'url']);
+  assert.doesNotMatch(result.jobs[0].descricao, /<p>/);
+  assert.equal(result.providers.length, 2);
+  assert.equal(result.providers.every(p => p.status === 'ok'), true);
+});
+test('unknown modality/seniority retained; explicit mismatches excluded', async () => {
+  const fetchImpl = async () => Response.json({ data: [{ ...row, candidate_required_location: '', location: 'Berlin', title: 'Designer', remote: false }] });
+  const result = await aggregateJobs({ fetchImpl, query: normalizeQuery({ providers: ['arbeitnow'], modality: 'hybrid', seniority: 'senior' }) });
+  assert.equal(result.jobs.length, 1);
+  const mismatch = await aggregateJobs({ fetchImpl: mock, query: normalizeQuery({ providers: ['remotive'], modality: 'onsite' }) });
+  assert.equal(mismatch.jobs.length, 0);
+});
+test('partial errors, disabled provider and total failure are distinguishable', async () => {
+  const fetchImpl = async url => { if (url.includes('arbeitnow')) throw new Error('secret upstream detail'); return mock(url); };
+  const result = await aggregateJobs({ fetchImpl, query: normalizeQuery({ providers: ['remotive', 'arbeitnow', 'gemini'] }) });
+  assert.equal(result.jobs.length, 1);
+  assert.deepEqual(result.providers.map(p => p.status), ['error', 'disabled', 'ok']);
+  assert.ok(!JSON.stringify(result).includes('secret upstream detail'));
+  await assert.rejects(aggregateJobs({ fetchImpl, query: normalizeQuery({ providers: ['arbeitnow'] }) }), error => error.status === 503 && error.providers[0].status === 'error');
+  await assert.rejects(aggregateJobs({ query: normalizeQuery({ providers: ['gemini'] }) }), error => error.providers[0].status === 'disabled');
+});
+test('deduplication, 40 cap, source pagination and bounded external body', async () => {
+  const rows = Array.from({ length: 45 }, (_, i) => ({ ...row, title: `Developer ${i}`, url: `https://example.com/${i}` }));
+  const result = await aggregateJobs({ fetchImpl: async () => Response.json({ jobs: [...rows, rows[0]] }), query: normalizeQuery({ providers: ['remotive'] }) });
+  assert.equal(result.jobs.length, 40);
+  assert.equal(result.truncated, true);
+  const paged = await aggregateJobs({ fetchImpl: async () => Response.json({ data: [], links: { next: 'https://example.com/page2' } }), query: normalizeQuery({ providers: ['arbeitnow'] }) });
+  assert.equal(paged.truncated, true);
+  await assert.rejects(readJson(new Response('x'.repeat(100)), 10), /limite/);
+});
+test('public feeds shared across filters; provider budget and failure cleanup', async () => {
+  let calls = 0; const feeds = new Map();
+  const args = { feeds, fetchImpl: async url => { calls++; return mock(url); } };
+  await Promise.all([aggregateJobs(args), aggregateJobs({ ...args, query: normalizeQuery({ keywords: 'marketing' }) })]);
+  assert.equal(calls, 2);
+  await aggregateJobs({ ...args, allowProvider: () => false });
+  assert.equal(calls, 2);
+  await assert.rejects(aggregateJobs({ allowProvider: () => false }), error => error.providers.every(p => p.status === 'error'));
+});
+async function serve(t, args) {
+  const server = createApp(args).listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
+  return `http://127.0.0.1:${server.address().port}`;
+}
+const post = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+test('HTTP options, normalized cache, distinct filters and bad JSON', async t => {
+  let calls = 0;
+  const base = await serve(t, { env: {}, search: async () => { calls++; return { jobs: [], providers: [], truncated: false }; } });
+  assert.equal((await (await fetch(base + '/api/options')).json()).providers[2].enabled, false);
+  for (const keywords of ['Java', ' java ', 'design']) assert.equal((await fetch(base + '/api/jobs', post({ keywords }))).status, 200);
+  assert.equal(calls, 2);
+  assert.equal((await fetch(base + '/api/jobs', post({ providers: ['bogus'] }))).status, 400);
+  assert.equal((await fetch(base + '/api/jobs', { ...post({}), body: '{' })).status, 400);
+  assert.equal((await fetch(base + '/api/jobs', post({ keywords: 'a'.repeat(5000) }))).status, 413);
+});
+test('global concurrent distinct queries capped; identical query single flight', async t => {
+  let release; const gate = new Promise(resolve => { release = resolve; }); let started = 0; let ready;
+  const four = new Promise(resolve => { ready = resolve; });
+  const base = await serve(t, { env: {}, search: async () => { if (++started === 4) ready(); await gate; return { jobs: [] }; } });
+  const requests = Array.from({ length: 4 }, (_, i) => fetch(base + '/api/jobs', post({ keywords: String(i) })));
+  await four;
+  try { assert.equal((await fetch(base + '/api/jobs', post({ keywords: 'fifth' }))).status, 429); }
+  finally { release(); }
+  assert.equal((await Promise.all(requests)).every(r => r.status === 200), true);
+});
