@@ -10,10 +10,30 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --paper: #f6f7f2; --ink: #192c27; --accent: #c5ef75; --line: #dbe1d5; }
+    :root { color-scheme: dark; --paper: #111416; --ink: #e8e9e7; --accent: #b5c7b8; --line: #32383b; }
     body { background: var(--paper); color: var(--ink); font-family: 'DM Sans', sans-serif; }
     h1, h2, .wordmark { font-family: 'Space Grotesk', sans-serif; }
-    .hero { background: radial-gradient(ellipse at 90% 20%, #dcecc4 0, transparent 58%); }
+    .hero { background: radial-gradient(ellipse at 95% 0%, #202a29 0, transparent 65%); }
+    body [class*="text-[#"] { color: #a8b2ad; }
+    body [class*="border-[#"] { border-color: var(--line); }
+    body [class*="bg-[#"], body [class*="bg-white"] { background-color: #1d2426; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    #search-button { background: var(--accent); color: #111916; }
+    #filters [aria-pressed="true"] { background: var(--accent); color: #111916; }
+    .search-panel { border: 1px solid var(--line); border-radius: 16px; padding: 24px; margin-bottom: 36px; background: #161b1d; }
+    .field-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; margin: 24px 0; }
+    .field-grid label { display: grid; gap: 8px; color: #b9c1bc; font-size: 14px; }
+    input[type="search"], select { width: 100%; min-width: 0; background: #111416; border: 1px solid var(--line); border-radius: 8px; padding: 12px; color: var(--ink); }
+    .choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .choice { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); padding: 9px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+    .choice:has(input:checked) { border-color: #819b88; background: #27332d; }
+    .choice:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+    input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+    .subtle { color: #a8b2ad; font-size: 13px; line-height: 1.7; }
+    .provider-report { padding: 10px 0; border-bottom: 1px solid var(--line); }
+    #error { background: #321e20; border-color: #714548; color: #ffc5c5; }
+    @media (max-width: 640px) { .field-grid { grid-template-columns: 1fr; } .search-panel { padding: 18px; } h1 { font-size: 42px !important; } }
     .job-card { animation: reveal .4s ease both; }
     @keyframes reveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
     :focus-visible { outline: 3px solid #4b7b29; outline-offset: 4px; }
@@ -34,18 +54,34 @@
       <div>
         <p class="text-xs font-bold tracking-[.2em] uppercase mb-5">Menos ruído. Mais direção.</p>
         <h1 class="text-5xl sm:text-6xl lg:text-7xl font-medium tracking-[-.05em] leading-[1.05]">Seu próximo passo<br><span class="text-[#647953]">começa aqui.</span></h1>
-        <p class="mt-6 max-w-lg text-[#617065] text-base leading-relaxed">Oportunidades de tecnologia que conectam sua experiência em front-end ao seu próximo desafio em redes e infraestrutura.</p>
-        <button id="search-button" type="button" class="mt-8 bg-[#192c27] text-white rounded-xl px-6 py-4 font-semibold hover:bg-[#304739] flex items-center gap-6">Buscar oportunidades <span aria-hidden="true">↗</span></button>
+        <p class="mt-6 max-w-lg text-[#617065] text-base leading-relaxed">Oportunidades em diferentes áreas. Remotas para quem está no Brasil, presenciais e híbridas em Mato Grosso. Você escolhe o que explorar.</p>
         <p class="text-xs text-[#657363] mt-3">Pesquisa sob demanda · Sem candidaturas automáticas</p>
       </div>
       <aside class="rounded-2xl border border-[#dbe1d5] bg-white/70 p-7 md:ml-6">
         <div class="flex justify-between items-center mb-7"><span class="text-xs uppercase tracking-widest font-bold">Seu ponto de partida</span><span class="w-3 h-3 bg-[#96b968] rounded-full" aria-hidden="true"></span></div>
-        <h2 class="text-2xl font-medium">Código, conexões<br>e novos caminhos.</h2>
-        <p class="mt-3 text-sm text-[#617065] leading-relaxed">Engenharia de Computação em formação. Front-end na Infocorp UFMT e estágio em redes e infraestrutura na Aptum.</p>
-        <div class="flex flex-wrap gap-2 mt-6 text-xs font-medium"><span class="rounded-full bg-[#eaf0e2] px-3 py-2">Front-end</span><span class="rounded-full bg-[#eaf0e2] px-3 py-2">Redes & Infra</span><span class="rounded-full bg-[#eaf0e2] px-3 py-2">Suporte avançado</span><span class="rounded-full bg-[#eaf0e2] px-3 py-2">DevOps</span></div>
-        <p class="mt-6 pt-5 border-t border-[#dbe1d5] text-xs text-[#617065]">FOCO <span class="float-right font-semibold text-[#192c27]">Júnior / Pleno</span></p>
+        <h2 class="text-2xl font-medium">Uma busca.<br>Mais possibilidades.</h2>
+        <p class="mt-3 text-sm text-[#617065] leading-relaxed">APIs de vagas e pesquisa na web com IA, quando configurada. Fontes reunidas, duplicatas removidas e filtros sob seu controle.</p>
+        <p class="mt-6 pt-5 border-t border-[#dbe1d5] text-xs text-[#617065]">BRASIL / MATO GROSSO · ATÉ 200 RESULTADOS</p>
       </aside>
     </section>
+    <form id="search-form" class="search-panel" aria-labelledby="search-title">
+      <h2 id="search-title" class="text-2xl font-medium">O que você quer encontrar?</h2>
+      <p class="subtle">Combine áreas ou deixe todas desmarcadas para pesquisar sem restrição de categoria.</p>
+      <fieldset class="mt-6">
+        <legend>Áreas de interesse</legend>
+        <div id="categories" class="choices"></div>
+        <button id="clear-categories" type="button" class="subtle mt-3 underline">Limpar seleção</button>
+      </fieldset>
+      <div class="field-grid">
+        <label>Palavras-chave<input id="keywords" type="search" maxlength="200" placeholder="Cargo, habilidade ou empresa"></label>
+        <label>Modalidade<select id="modality"><option value="all">Todas</option><option value="remote">Remoto · Brasil</option><option value="onsite">Presencial · MT</option><option value="hybrid">Híbrido · MT</option></select></label>
+        <label>Experiência<select id="seniority"><option value="all">Todos os níveis</option><option value="intern">Estágio / trainee</option><option value="junior">Júnior</option><option value="mid">Pleno</option><option value="senior">Sênior</option></select></label>
+      </div>
+      <fieldset><legend>Fontes de pesquisa</legend><div id="providers" class="choices"></div></fieldset>
+      <p id="options-status" role="status" class="subtle mt-3">Carregando categorias e fontes...</p>
+      <button id="retry-options" type="button" hidden class="underline mt-3">Tentar carregar novamente</button>
+      <button id="search-button" type="submit" disabled class="mt-8 rounded-xl px-6 py-4 font-semibold">Buscar oportunidades ↗</button>
+    </form>
     <section aria-labelledby="results-title" class="pb-16">
       <div class="flex flex-wrap justify-between items-center gap-5 border-t border-[#dbe1d5] pt-8">
         <h2 id="results-title" class="text-2xl font-medium">No seu radar <span id="count" class="ml-2 bg-[#e3eadb] text-sm rounded-full px-3 py-1">0</span></h2>
@@ -61,7 +97,7 @@
       <div id="empty" class="rounded-2xl border border-dashed border-[#cbd5c1] p-10 md:p-16 text-center">
         <span class="inline-block text-3xl bg-[#e8efdf] rounded-2xl px-5 py-3 mb-5" aria-hidden="true">⌕</span>
         <h2 id="empty-title" class="text-xl font-medium">Seu radar está pronto.</h2>
-        <p id="empty-description" class="text-sm text-[#617065] mt-2 max-w-md mx-auto">Clique em “Buscar oportunidades” para encontrar sugestões de pesquisa alinhadas ao seu perfil, não vagas verificadas.</p>
+        <p id="empty-description" class="text-sm text-[#617065] mt-2 max-w-md mx-auto">Escolha suas áreas e fontes para começar. Confirme sempre a disponibilidade e os requisitos no anúncio original.</p>
       </div>
       <section id="sources" aria-labelledby="sources-title" hidden class="mt-8 border-t border-[#dbe1d5] pt-6">
         <h2 id="sources-title" class="text-xl font-medium">Fontes e sugestões de pesquisa</h2>
@@ -78,6 +114,38 @@
     let activeFilter = 'all';
     let hasResults = false;
     let lastResultStatus = '';
+
+    async function loadOptions() {
+      $('retry-options').hidden = true;
+      try {
+        const response = await fetch('/api/options');
+        if (!response.ok) throw new Error('Não foi possível carregar os filtros.');
+        const data = await response.json();
+        for (const key of ['categories', 'providers']) {
+          $(''+key).replaceChildren();
+          for (const option of data[key]) {
+            const label = element('label', 'choice', '');
+            const input = document.createElement('input');
+            input.type = 'checkbox'; input.value = option.id; input.name = key;
+            if (key === 'providers') { input.disabled = !option.enabled; input.checked = option.enabled; }
+            label.append(input, document.createTextNode(option.label));
+            $(key).append(label);
+          }
+        }
+        $('options-status').textContent = data.providers.some(p => p.id === 'gemini' && p.enabled)
+          ? 'IA disponível. A cobertura depende das fontes; nenhuma busca garante todas as vagas.'
+          : 'APIs disponíveis. Para incluir pesquisa web com IA, configure GEMINI_API_KEY no servidor.';
+        $('search-button').disabled = false;
+      } catch (error) {
+        $('options-status').textContent = 'Falha ao carregar categorias e fontes. Tente novamente.';
+        $('retry-options').hidden = false;
+      }
+    }
+    $('retry-options').addEventListener('click', loadOptions);
+    $('clear-categories').addEventListener('click', () => {
+      $('categories').querySelectorAll('input').forEach(input => { input.checked = false; });
+    });
+    loadOptions();
 
     function safeUrl(value) {
       const url = new URL(value);
@@ -117,7 +185,7 @@
 
     function renderJobs() {
       const visible = jobs.filter((job) => activeFilter === 'all' ||
-        (activeFilter === 'remote' ? /remoto/i.test(job.local) : /\/MT\b/i.test(job.local)));
+        (activeFilter === 'remote' ? /remot[eo]/i.test(job.local) && !/h[ií]brid/i.test(job.local) : !/remot[eo]/i.test(job.local) || /h[ií]brid/i.test(job.local)));
       $('jobs').replaceChildren();
       $('count').textContent = visible.length;
       $('empty').hidden = visible.length > 0;
@@ -157,10 +225,15 @@
       renderJobs();
     });
 
-    $('search-button').addEventListener('click', async () => {
+    $('search-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
       $('error').hidden = true;
       let timer;
       try {
+        const selected = key => [...$(key).querySelectorAll('input:checked')].map(input => input.value);
+        const query = { categories: selected('categories'), providers: selected('providers'), keywords: $('keywords').value,
+          modality: $('modality').value, seniority: $('seniority').value };
+        if (!query.providers.length) throw new Error('Selecione pelo menos uma fonte de pesquisa.');
         $('search-button').disabled = true;
         $('search-button').textContent = 'Pesquisando…';
         $('jobs').setAttribute('aria-busy', 'true');
@@ -171,7 +244,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
-          body: JSON.stringify({})
+          body: JSON.stringify(query)
         });
         const payload = await response.json();
         if (!response.ok || typeof payload?.error === 'string') {
@@ -185,6 +258,10 @@
         }
         // Prepara e valida todas as fontes antes de substituir o resultado anterior.
         const sourceContent = document.createDocumentFragment();
+        for (const provider of payload.providers || []) {
+          sourceContent.append(element('p', 'provider-report', `${provider.label}: ${provider.status === 'ok' ? `${provider.count} resultado(s)` : provider.status === 'disabled' ? 'indisponível' : 'falhou'} · ${provider.message || ''}`));
+        }
+        if (payload.truncated) sourceContent.append(element('p', 'provider-report', 'A cobertura atingiu um limite da fonte ou da pesquisa. Refine suas categorias e palavras-chave.'));
         const list = element('ul', 'space-y-2 break-words', '');
         for (const source of payload.sources) {
           if (!source || typeof source.title !== 'string' || !source.title.trim() ||

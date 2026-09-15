@@ -29,7 +29,7 @@ test('reject ungrounded results, unsafe URLs and truncated output', () => {
 });
 test('request actually enables Google Search and keeps key in header', async () => {
   let calls = 0;
-  const result = await searchJobs({ apiKey: 'test-key', fetchImpl: async (url, options) => {
+  const result = await searchJobs({ apiKey: 'test-key', query: { categories: ['agro', 'legal'] }, fetchImpl: async (url, options) => {
     calls++;
     assert.match(url, /models\/gemini-3\.6-flash:generateContent$/);
     assert.ok(!url.includes('test-key'));
@@ -40,10 +40,17 @@ test('request actually enables Google Search and keeps key in header', async () 
       assert.equal(body.generationConfig.responseMimeType, undefined);
       assert.doesNotMatch(body.contents[0].parts[0].text, /JSON/);
       assert.match(body.contents[0].parts[0].text, /exige o uso da ferramenta Google Search/);
+      assert.match(body.contents[0].parts[0].text, /Agro e agronegocio/);
+      assert.match(body.contents[0].parts[0].text, /Juridico/);
+      assert.match(body.contents[0].parts[0].text, /Mato Grosso do Sul/);
+      assert.match(body.contents[0].parts[0].text, /elegibilidade explicita para Brasil/);
     } else {
       assert.equal(body.tools, undefined);
       assert.equal(body.generationConfig.responseMimeType, 'application/json');
       assert.equal(body.generationConfig.responseJsonSchema.maxItems, 40);
+      const input = JSON.parse(body.contents[0].parts[0].text);
+      assert.deepEqual(input.query.categories, ['agro', 'legal']);
+      assert.match(input.geographicPolicy, /somente Mato Grosso MT, nunca MS/);
     }
     assert.equal(body.generationConfig.maxOutputTokens, 8192);
     assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'medium' });
